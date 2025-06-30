@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { Search, Sparkles, User, Brain, Zap, Globe } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
+import { Image } from 'react-native';
+import whiteCircle from '../../assets/white_circle_360x360.png';
 
 const { width } = Dimensions.get('window');
 
@@ -61,7 +63,17 @@ async function groqResponse(
     { role: 'user', content: concatenatedTriviaQuizUser }
   ];
 
-  const requestBody = {
+  const requestBody: {
+    model: string;
+    messages: { role: string; content: string }[];
+    temperature: number;
+    max_completion_tokens: number;
+    top_p: number;
+    stop: null;
+    stream: boolean;
+    tools?: any;
+    tool_choice?: any;
+  } = {
     model: aiModel,
     messages: messagesFinal,
     temperature,
@@ -132,7 +144,13 @@ async function groqResponse(
       
     } catch (error) {
       // If it's a network error or fetch error, retry
-      if (attempt < MAX_RETRIES && (error instanceof TypeError || error.message.includes('fetch'))) {
+      if (
+        attempt < MAX_RETRIES &&
+        (
+          (error instanceof TypeError) ||
+          (typeof error === 'object' && error !== null && 'message' in error && typeof (error as any).message === 'string' && (error as any).message.includes('fetch'))
+        )
+      ) {
         console.log(`Network error occurred. Retrying in ${RETRY_DELAY / 1000} seconds... (Attempt ${attempt}/${MAX_RETRIES})`);
         await wait(RETRY_DELAY * attempt);
         continue;
@@ -202,20 +220,25 @@ export default function HomeScreen() {
       setIsLoading(false);
 
       // Safely log the AI response to prevent JSON parsing errors
-      try {
-        const parsedResponse = JSON.parse(groqOutput[1]);
-        console.log('AI Response (parsed):', JSON.stringify(parsedResponse, null, 2));
-      } catch (parseError) {
-        console.log('AI Response (raw text):', groqOutput[1]);
-      }
-
-      router.push({
-        pathname: '/news',
-        params: {
-          person: personName.trim(),
-          aiResponse: groqOutput[1],
+      if (groqOutput && groqOutput[1]) {
+        try {
+          const parsedResponse = JSON.parse(groqOutput[1]);
+          console.log('AI Response (parsed):', JSON.stringify(parsedResponse, null, 2));
+        } catch (parseError) {
+          console.log('AI Response (raw text):', groqOutput[1]);
         }
-      });
+
+        router.push({
+          pathname: '/news',
+          params: {
+            person: personName.trim(),
+            aiResponse: groqOutput[1],
+          }
+        });
+      } else {
+        setError('No response received from Groq API.');
+        console.error('No response received from Groq API.');
+      }
     } catch (error) {
       setIsLoading(false);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -265,6 +288,11 @@ export default function HomeScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
+        <Image
+          source={whiteCircle}
+          style={styles.whiteCircle}
+          resizeMode="contain"
+        />
         <View style={styles.headerContent}>
           <View style={styles.logoContainer}>
             <Sparkles size={48} color="#fff" />
@@ -449,6 +477,15 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
     paddingHorizontal: 24,
     position: 'relative',
+  },
+  whiteCircle: {
+    position: 'absolute',
+    top: 40,
+    right: 40,
+    width: 120,
+    height: 120,
+    opacity: 1,
+    zIndex: 1,
   },
   headerContent: {
     alignItems: 'center',
